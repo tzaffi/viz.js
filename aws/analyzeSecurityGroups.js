@@ -11,6 +11,21 @@ var object2array = function(obj){
   return arr;
 }
 
+var object2simpleGraphvizDigraph = function(obj){
+  var edges = "";
+  Object.keys(obj).map(key => {
+    var inEdges = obj[key];
+    inEdges.map(vert => {
+      edges += `
+      "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
+    });
+  });
+  return `digraph G {
+    ${edges}
+  }`;
+}
+
+
 var getSGinfo = function(done){
 
   var getSGtag = function(sgObj, tagName){
@@ -125,8 +140,10 @@ ASQ(
   },
   consolidateSimpleSGgraphLabels,
   (done, digraph) => {
+    var gv = object2simpleGraphvizDigraph(digraph);
     console.log("\n__________________\nConsolidatedDigraph\n__________________\n",
-                digraph);
-    done(digraph);
-  }  
+                gv);
+    done(gv);
+  }
+    
 );

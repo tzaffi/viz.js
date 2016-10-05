@@ -11,7 +11,7 @@ var object2array = function(obj){
   return arr;
 }
 
-var object2simpleGraphvizDigraph = function(obj){
+var object2simpleGraphvizDigraph = function(obj, graphName = 'G'){
   var edges = "";
   Object.keys(obj).map(key => {
     var inEdges = obj[key];
@@ -20,11 +20,42 @@ var object2simpleGraphvizDigraph = function(obj){
       "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
     });
   });
-  return `digraph G {
+  return `digraph ${graphName} {
     ${edges}
   }`;
 }
 
+/* Seperate by ip and security group */
+var objectG2raphvizDigraphSeparatedBySourceType = function(obj, graphName = 'G'){
+  var edges = "";
+  Object.keys(obj).map(key => {
+    var inEdges = obj[key];
+    inEdges.map(vert => {
+      edges += `
+      "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
+    });
+  });
+  
+  var ipSubgraph = `subgraph IPaddresses {
+    style=filled;
+    color=lightgrey;
+    node [style=filled,color=white];
+    label = "IP Addresses";
+  }`;
+  var sgSubgraph = `subgraph SecurityGroups {    
+    node [style=filled];
+    label = "Security Groups";
+    color=blue
+  }`;
+  return `digraph ${graphName} {
+
+    ${sgSubgraph}
+
+    ${ipSubgraph}
+    
+    ${edges}
+  }`;
+}
 
 var getSGinfo = function(done){
 
@@ -105,7 +136,7 @@ var makeSimpleSGgraph = function(done, SecurityGroups, IdDictionary, vpcID){
 }
 
 var consolidateSimpleSGgraphLabels = function(done, digraph){
-  var consolidate = {};
+  var consolidated = {};
   Object.keys(digraph).map(sgKey => {
     var originalEdges = digraph[sgKey];
     var verts = {};
@@ -118,9 +149,9 @@ var consolidateSimpleSGgraphLabels = function(done, digraph){
         verts[vert] = port;
       }
     });
-    consolidate[sgKey] = object2array(verts);
+    consolidated[sgKey] = object2array(verts);
   });
-  done(consolidate);
+  done(digraph, consolidated);
 }
 
 ASQ(
@@ -139,11 +170,16 @@ ASQ(
     done(digraph);
   },
   consolidateSimpleSGgraphLabels,
-  (done, digraph) => {
-    var gv = object2simpleGraphvizDigraph(digraph);
+  (done, consolidated) => {
+    var gv = object2simpleGraphvizDigraph(consolidated, 'SimpleGraph');
     console.log("\n__________________\nConsolidatedDigraph\n__________________\n",
                 gv);
-    done(gv);
-  }
-    
+    done(consolidated, gv);
+  },
+  (done, consolidated) => {
+    var gv = objectG2raphvizDigraphSeparatedBySourceType(consolidated, 'SimpleGraph');
+    console.log("\n__________________\nSeperatedBySourceTypeDigraph\n__________________\n",
+                gv);
+    done(consolidated, gv);
+  }    
 );

@@ -10,93 +10,79 @@ var object2array = function(obj){
   var arr = [];
   Object.keys(obj).map(key => arr.push([key, obj[key]]));
   return arr;
-}
+};
 
 var isIpAddress = function(addr){
   var threeDots = /([.][^.]+){3}/;
   return addr.match(threeDots) ? true : false;
-}
+};
 
 var isSgAddress = function(addr){
   var sgMatcher = /^sg-/;
   return addr.match(sgMatcher) ? true : false;
-}
+};
 
-/******************* GraphViz String Generators *********************/
-
-var object2simpleGraphvizDigraph = function(obj, graphName = 'G'){
-  var edges = "";
-  Object.keys(obj).map(key => {
-    var inEdges = obj[key];
-    inEdges.map(vert => {
-      edges += `
-      "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
-    });
-  });
-  return `digraph ${graphName} {
-    ${edges}
-  }`;
-}
 
 /* Separate by ip and security group */
-var objectG2raphvizDigraphSeparatedBySourceType = function(obj, graphName = 'G'){
-  var edges = "";
-  var ips = {};
-  var sgs = {};
+// var objectG2raphvizDigraphSeparatedBySourceType = function(obj, graphName = 'G'){
+//   var edges = "";
+//   var ips = {};
+//   var sgs = {};
 
-  Object.keys(obj).map(key => {
-    var inEdges = obj[key];
-    inEdges.map(vert => {
-      edges += `
-      "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
+//   Object.keys(obj).map(key => {
+//     var inEdges = obj[key];
+//     inEdges.map(vert => {
+//       edges += `
+//       "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
      
-      if(isIpAddress(vert[0])) {
-        ips[vert[0]] = vert[0];
-      }
-      else if(isSgAddress(vert[0])) {
-        sgs[vert[0]] = vert[0];
-      }
-      if(isIpAddress(key)) {
-        ips[key] = key;
-      }
-      else if(isSgAddress(key)) {
-        sgs[key] = key;
-      }      
-    });
-  });
+//       if(isIpAddress(vert[0])) {
+//         ips[vert[0]] = vert[0];
+//       }
+//       else if(isSgAddress(vert[0])) {
+//         sgs[vert[0]] = vert[0];
+//       }
+//       if(isIpAddress(key)) {
+//         ips[key] = key;
+//       }
+//       else if(isSgAddress(key)) {
+//         sgs[key] = key;
+//       }      
+//     });
+//   });
 
-  ipStr = "";
-  Object.keys(ips).map(ip => ipStr += ('"' + ip + '";\n'));
+//   var ipStr = "";
+//   Object.keys(ips).map(ip => ipStr += ('"' + ip + '";\n'));
 
-  sgStr = "";
-  Object.keys(sgs).map(sg => sgStr += ('"' + sg + '";\n'));
+//   var sgStr = "";
+//   Object.keys(sgs).map(sg => sgStr += ('"' + sg + '";\n'));
                        
-  var sgSubgraph = `subgraph cluster_0 {    
-    label = "Security Groups";
-    color=blue;
-    node [style=filled];
-    ${sgStr}
-  }`;
+//   var sgSubgraph = `subgraph cluster_0 {    
+//     label = "Security Groups";
+//     color=blue;
+//     node [style=filled];
+//     ${sgStr}
+//   }`;
 
-  var ipSubgraph = `subgraph cluster_1 {
-    label = "IP Addresses";
-    style=filled;
-    color=lightgrey;
-    node [style=filled,color=white];
-    ${ipStr}
-  }`;
+//   var ipSubgraph = `subgraph cluster_1 {
+//     label = "IP Addresses";
+//     style=filled;
+//     color=lightgrey;
+//     node [style=filled,color=white];
+//     ${ipStr}
+//   }`;
     
-  return `digraph ${graphName} {
+//   return `digraph ${graphName} {
 
-    ${sgSubgraph}
+//     ${sgSubgraph}
 
-    ${ipSubgraph}
+//     ${ipSubgraph}
     
-    ${edges}
-  }`;
-}
+//     ${edges}
+//   }`;
+// }
 
-/******************* ASQ functions 
+
+/******************* Asqx functions 
  * To make it a little easier to program and plug and play, 
  * we specify some conventions for how Asynquence-compatible
  * functions should be declared and writted:
@@ -149,10 +135,137 @@ var doublerAndTripler = function(done, params){
     return params;
   }
 }
+*********************/
+
+// Create an asq compatible printer that prints a particular part of params
+// with given print options:
+var makePrinter = function(tagToPrint, useJSONstringify = true){
+  // Expected params: * params[tagToPrint] - this should exist
+  // Output params:   * none are added. This is purely a side-effect function
+  return function printer(done, params){
+    var printObj = params[tagToPrint];
+    if(useJSONstringify) {
+      printObj = JSON.stringify(printObj, null, 2);
+    }
+    console.log(`
+________________________________________________________________________
+${tagToPrint}:
+________________________________________________________________________
+${printObj}`);
+    done(params);
+  };
+};
+
+
+/******************* GraphViz String Generators
+ * o- printerType - one of 'simpleDigraph', 'separateSourceTypes'
+ * o- tagToPrint - the params key to use, i.e. params[tagToPrint]
+ * o- graphName - the name to give the graph in the graphViz definition
  *********************/
+var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G') {
+  var functionCatalog = {
+    // Expected params: * params[tagToPrint] - this should exist
+    // Output params:   * prrams[tagToPrint + '.gv'] - a GraphViz string ready to print
+    simpleDigraph: function(done, params){
+      var edges = '';
+      var obj = params[tagToPrint];
+      Object.keys(obj).map(key => {
+        var inEdges = obj[key];
+        inEdges.map(vert => {
+          edges += `
+          "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
+        });
+      });
+      params[tagToPrint + '.gv'] =  `digraph ${graphName} {
+        ${edges}
+      }`;
+      if(done){
+        return done(params);
+      } else {
+        return params;
+      }
+    },
+    separateSourceTypes: function(done, params){
+      var edges = '';
+      var ips = {};
+      var sgs = {};
+      var obj = params[tagToPrint];
+      
+      Object.keys(obj).map(key => {
+        var inEdges = obj[key];
+        inEdges.map(vert => {
+          edges += `
+          "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
+          
+          if(isIpAddress(vert[0])) {
+            ips[vert[0]] = vert[0];
+          }
+          else if(isSgAddress(vert[0])) {
+            sgs[vert[0]] = vert[0];
+          }
+          if(isIpAddress(key)) {
+            ips[key] = key;
+          }
+          else if(isSgAddress(key)) {
+            sgs[key] = key;
+          }      
+        });
+      });
+      
+      var ipStr = '';
+      Object.keys(ips).map(ip => ipStr += ('"' + ip + '";\n'));
+      
+      var sgStr = '';
+      Object.keys(sgs).map(sg => sgStr += ('"' + sg + '";\n'));
+      
+      var sgSubgraph = `subgraph cluster_0 {    
+        label = 'Security Groups';
+        color=blue;
+        node [style=filled];
+        ${sgStr}
+      }`;
+      
+      var ipSubgraph = `subgraph cluster_1 {
+        label = 'IP Addresses';
+        style=filled;
+        color=lightgrey;
+        node [style=filled,color=white];
+        ${ipStr}
+      }`;
+      
+      params[tagToPrint + '.gv'] = `digraph ${graphName} {
+        
+        ${sgSubgraph}
+        
+        ${ipSubgraph}
+        
+        ${edges}
+      }`;
+      if(done){
+        return done(params);
+      } else {
+        return params;
+      }
+    }
+  };
+  return functionCatalog[printerType];
+};
 
-
-var getSGinfo = function(done){
+var getSGinfo = function(done, params){
+  var awsParams = {
+    DryRun: false
+  };
+  
+  if (!params.VpcId){
+    params.VpcId = null;
+  } else {
+    awsParams.Filters =  [
+      {
+        Name: 'vpc-id',
+        Values: [ params.VpcId ]
+      }
+    ];
+  }
 
   var getSGtag = function(sgObj, tagName){
     var tagVal = sgObj.Tags.find(tag => {
@@ -161,13 +274,13 @@ var getSGinfo = function(done){
     if(tagVal)
       return tagVal.Value;
     return null;
-  }
+  };
 
   var SecurityGroups = {};
   var IdDictionary = {};
   var prepareSGdigraph = function(data){
-    data.SecurityGroups.forEach(function(val, idx) {
-      var obj = {}
+    data.SecurityGroups.forEach(function(val) {
+      var obj = {};
       if(SecurityGroups[val.VpcId]){
         SecurityGroups[val.VpcId].push(obj);
       } else {
@@ -197,22 +310,12 @@ var getSGinfo = function(done){
       obj.AWSobj = val;
       IdDictionary[val.GroupId] = val.GroupName;
     });
-    done(SecurityGroups, IdDictionary);
-  }
-
-  var params = {
-    DryRun: false,
-    // Filters: [
-    //   {
-    //     Name: 'vpc-id',
-    //     Values: [
-    //       'vpc-79fa251c'
-    //     ]
-    //   }
-    // ]
+    params.SecurityGroups = SecurityGroups;
+    params.IdDictionary = IdDictionary;
+    done(params);
   };
 
-  ec2.describeSecurityGroups(params, function(err, data) {
+  ec2.describeSecurityGroups(awsParams, function(err, data) {
     if (err) {
       console.log(err, err.stack);
       done.fail(err);
@@ -220,21 +323,34 @@ var getSGinfo = function(done){
       prepareSGdigraph(data, console.log);
     }
   });
-}
+};
 
-var makeSimpleSGgraph = function(done, SecurityGroups, IdDictionary, vpcID){
+// Create a simple di-graph which serves as a test that the Security Group information
+// is formatted as expected. Can also be used a basis for making more complex and
+// informative di-graphs.
+// Allow for non-ASQ usage by returning params in the case that done is undefined.
+// Expected params: * params.SecurityGroups - SecurityGroup information formatted for easier graph writing
+//                  * params.VpcId - the vpcId to key off in params.SecurityGroups
+// Output params:   * params.SimpleSGdigraph - a simple di-graph for the Security Groups of the given VPC
+var makeSimpleSGgraph = function(done, params){
+  var SecurityGroups = params.SecurityGroups;
+  var vpcID = params.VpcId;
   var digraph = {};
   SecurityGroups[vpcID].map(sg => {
     digraph[sg.GroupId] = sg.InEdges;
   });
+  params.SimpleSGdigraph = digraph;
   if(done){
-    done(digraph);
+    done(params);
   } else {
-    return digraph;
+    return params;
   }
-}
+};
 
-var consolidateSimpleSGgraphLabels = function(done, digraph){
+// Expected params: * params.SimpleSGdigraph - a simple di-graph for the Security Groups of the given VPC
+// Output params:   * params.ConsolidatedSGdigraph - a version of the input where multiple edges are denoted by a single edge with multiple labels
+var consolidateSimpleSGgraphLabels = function(done, params){
+  var digraph = params.SimpleSGdigraph;
   var consolidated = {};
   Object.keys(digraph).map(sgKey => {
     var originalEdges = digraph[sgKey];
@@ -250,46 +366,28 @@ var consolidateSimpleSGgraphLabels = function(done, digraph){
     });
     consolidated[sgKey] = object2array(verts);
   });
+  params.ConsolidatedSGdigraph = consolidated;
   if(done){
-    done(digraph, consolidated);
+    done(params);
   } else {
-    return {digraph: digraph, consolidated: consolidated};
+    return params;
   }
-}
+};
 
-var makeEdLabSGgraph = function(done, SecurityGroups, IdDictionary, vpcID){
-  var simpleDigraph = makeSimpleSGgraph(null, SecurityGroups, IdDictionary, vpcID);  
-  var digraphs = consolidatedSimpleSGgraphLabels(null, simpleDigraph);
-  var digraph = digraphs.consolidated;
-  done(SecurityGroups, IdDictionary, digraph);
-}
+var asqParams = { VpcId: 'vpc-76d49213' };
+ASQ(asqParams)
+  .then(
+    getSGinfo,
+    makePrinter('SecurityGroups'),
+    makePrinter('IdDictionary'),
+    makeSimpleSGgraph,
+    makePrinter('SimpleSGdigraph'),
+    makeGraphVizString('simpleDigraph', 'SimpleSGdigraph', 'Simple_Graph'),
+    makePrinter('SimpleSGdigraph.gv', false),
+    consolidateSimpleSGgraphLabels,
+    makeGraphVizString('simpleDigraph', 'ConsolidatedSGdigraph', 'Consolidated_Graph'),
+    makePrinter('ConsolidatedSGdigraph.gv', false),
+    makeGraphVizString('separateSourceTypes', 'ConsolidatedSGdigraph', 'Separated_Graph'),
+    makePrinter('ConsolidatedSGdigraph.gv', false)
+  );
 
-ASQ(
-  getSGinfo,
-  (done, SecurityGroups, IdDictionary) => {
-    console.log("\n__________________\nSecurityGroups:\n__________________\n",
-                JSON.stringify(SecurityGroups, null, 2));
-    console.log("\n__________________\nIdDictionary\n__________________\n",
-                IdDictionary);
-    done(SecurityGroups, IdDictionary, 'vpc-76d49213');
-  },
-  makeSimpleSGgraph,
-  (done, digraph) => {
-    console.log("\n__________________\nSimpleDigraph\n__________________\n",
-                digraph);
-    done(digraph);
-  },
-  consolidateSimpleSGgraphLabels,
-  (done, digraph, consolidated) => {
-    var gv = object2simpleGraphvizDigraph(consolidated, 'SimpleGraph');
-    console.log("\n__________________\nConsolidatedDigraph\n__________________\n",
-                gv);
-    done(digraph, consolidated, gv);
-  },
-  (done, digraph, consolidated) => {
-    var gv = objectG2raphvizDigraphSeparatedBySourceType(consolidated, 'SeparatedGraph');
-    console.log("\n__________________\nSeperatedBySourceTypeDigraph\n__________________\n",
-                gv);
-    done(consolidated, gv);
-  }    
-);

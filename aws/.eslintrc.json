@@ -1,0 +1,43 @@
+{
+  "globals": {
+  },
+  "env": {
+    "browser": true,
+    "es6": true,
+    "node": true
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaFeatures": {
+      "experimentalObjectRestSpread": true
+    },
+    "sourceType": "module"
+  },
+  "plugins": [
+    "react"
+  ],
+  "rules": {
+    "no-console": 0,
+    "indent": [
+      "error",
+      2,
+      { "SwitchCase": 1 }
+    ],
+    "react/display-name": 0,
+    "react/wrap-multilines": 2,
+    "no-undef" : 1,
+    "no-unused-vars": 1,
+    "linebreak-style": [
+      "error",
+      "unix"
+    ],
+    "quotes": [
+      "error",
+      "single"
+    ],
+    "semi": [
+      "error",
+      "always"
+    ]
+  }
+}

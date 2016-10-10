@@ -165,7 +165,7 @@ ${printObj}`);
 var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G') {
   var functionCatalog = {
     // Expected params: * params[tagToPrint] - this should exist
-    // Output params:   * prrams[tagToPrint + '.gv'] - a GraphViz string ready to print
+    // Output params:   * params[tagToPrint + '.gv'] - a GraphViz string ready to print
     simpleDigraph: function(done, params){
       var edges = '';
       var obj = params[tagToPrint];
@@ -219,14 +219,14 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G') {
       Object.keys(sgs).map(sg => sgStr += ('"' + sg + '";\n'));
       
       var sgSubgraph = `subgraph cluster_0 {    
-        label = 'Security Groups';
+        label = "Security Groups";
         color=blue;
         node [style=filled];
         ${sgStr}
       }`;
       
       var ipSubgraph = `subgraph cluster_1 {
-        label = 'IP Addresses';
+        label = "IP Addresses";
         style=filled;
         color=lightgrey;
         node [style=filled,color=white];
@@ -251,6 +251,15 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G') {
   return functionCatalog[printerType];
 };
 
+// Query the Security Groups from AWS and store in an object.
+// If no 
+// is formatted as expected. Can also be used a basis for making more complex and
+// informative di-graphs.
+// Allow for non-ASQ usage by returning params in the case that done is undefined.
+// Expected params: * params.VpcId - the vpcId: if null take all VPC's
+// Output params:   * params.SecurityGroups - SecurityGroup information formatted for easier graph writing
+//                  * params.IdDictionary - the security group -> group name mapping
+//                  * params.TypeDictionary - the security group -> Type mapping
 var getSGinfo = function(done, params){
   var awsParams = {
     DryRun: false
@@ -278,6 +287,7 @@ var getSGinfo = function(done, params){
 
   var SecurityGroups = {};
   var IdDictionary = {};
+  var TypeDictionary = {};
   var prepareSGdigraph = function(data){
     data.SecurityGroups.forEach(function(val) {
       var obj = {};
@@ -309,9 +319,11 @@ var getSGinfo = function(done, params){
       
       obj.AWSobj = val;
       IdDictionary[val.GroupId] = val.GroupName;
+      TypeDictionary[val.GroupId] = obj.Type;
     });
     params.SecurityGroups = SecurityGroups;
     params.IdDictionary = IdDictionary;
+    params.TypeDictionary = TypeDictionary;
     done(params);
   };
 
@@ -374,6 +386,33 @@ var consolidateSimpleSGgraphLabels = function(done, params){
   }
 };
 
+// Make a translator that takes a digraph and changes all nodes using the tagged dictionary
+// o- digraphTag gives the location of the digraph to translate in params
+// o- dictionalyTag gives the location of the dictionary to tranlate with
+var makeGraphTranslator = function(digraphTag, dictionaryTag){
+  // Expected params: * params[digraphTag] - the digraph
+  //                  * params[dictionaryTag] - the dictionary to translate with
+  // Output params:   * params[digraphTag + dictionaryTag] - the translated graph
+  return function translate(done, params){
+    var digraph = params[digraphTag];
+    var dictionary = params[dictionaryTag];
+    var translator = sgId => (dictionary[sgId] ? dictionary[sgId] : sgId);
+    
+    var translated = {};
+    Object.keys(digraph).map(sgKey => {      
+      var originalEdges = digraph[sgKey];
+      var translatedEdges = [];
+      originalEdges.map(edge => {
+        var translatedEdge = [ translator(edge[0]), edge[1] ];
+        translatedEdges.push(translatedEdge);
+      });
+      translated[translator(sgKey)] = translatedEdges;
+    });
+    params[digraphTag + dictionaryTag] = translated;
+    done(params);
+  };
+};
+
 var asqParams = { VpcId: 'vpc-76d49213' };
 ASQ(asqParams)
   .then(
@@ -388,6 +427,11 @@ ASQ(asqParams)
     makeGraphVizString('simpleDigraph', 'ConsolidatedSGdigraph', 'Consolidated_Graph'),
     makePrinter('ConsolidatedSGdigraph.gv', false),
     makeGraphVizString('separateSourceTypes', 'ConsolidatedSGdigraph', 'Separated_Graph'),
-    makePrinter('ConsolidatedSGdigraph.gv', false)
+    makePrinter('ConsolidatedSGdigraph.gv', false),
+    makeGraphTranslator('ConsolidatedSGdigraph', 'IdDictionary'),
+    makePrinter('ConsolidatedSGdigraphIdDictionary'),
+    makeGraphVizString('separateSourceTypes', 'ConsolidatedSGdigraphIdDictionary', 'Named_Separated_Graph'),
+    makePrinter('ConsolidatedSGdigraphIdDictionary.gv', false),
+    makePrinter('TypeDictionary')
   );
 

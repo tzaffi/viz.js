@@ -23,65 +23,6 @@ var isSgAddress = function(addr){
 };
 
 
-/* Separate by ip and security group */
-// var objectG2raphvizDigraphSeparatedBySourceType = function(obj, graphName = 'G'){
-//   var edges = "";
-//   var ips = {};
-//   var sgs = {};
-
-//   Object.keys(obj).map(key => {
-//     var inEdges = obj[key];
-//     inEdges.map(vert => {
-//       edges += `
-//       "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
-     
-//       if(isIpAddress(vert[0])) {
-//         ips[vert[0]] = vert[0];
-//       }
-//       else if(isSgAddress(vert[0])) {
-//         sgs[vert[0]] = vert[0];
-//       }
-//       if(isIpAddress(key)) {
-//         ips[key] = key;
-//       }
-//       else if(isSgAddress(key)) {
-//         sgs[key] = key;
-//       }      
-//     });
-//   });
-
-//   var ipStr = "";
-//   Object.keys(ips).map(ip => ipStr += ('"' + ip + '";\n'));
-
-//   var sgStr = "";
-//   Object.keys(sgs).map(sg => sgStr += ('"' + sg + '";\n'));
-                       
-//   var sgSubgraph = `subgraph cluster_0 {    
-//     label = "Security Groups";
-//     color=blue;
-//     node [style=filled];
-//     ${sgStr}
-//   }`;
-
-//   var ipSubgraph = `subgraph cluster_1 {
-//     label = "IP Addresses";
-//     style=filled;
-//     color=lightgrey;
-//     node [style=filled,color=white];
-//     ${ipStr}
-//   }`;
-    
-//   return `digraph ${graphName} {
-
-//     ${sgSubgraph}
-
-//     ${ipSubgraph}
-    
-//     ${edges}
-//   }`;
-// }
-
-
 /******************* Asqx functions 
  * To make it a little easier to program and plug and play, 
  * we specify some conventions for how Asynquence-compatible
@@ -161,10 +102,12 @@ ${printObj}`);
  * o- printerType - one of 'simpleDigraph', 'separateSourceTypes'
  * o- tagToPrint - the params key to use, i.e. params[tagToPrint]
  * o- graphName - the name to give the graph in the graphViz definition
+ * o- metadataTag - the optional name of the metadataTag
  *********************/
-var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G') {
+var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', metadataTag = null) {
   var functionCatalog = {
-    // Expected params: * params[tagToPrint] - this should exist
+    // Expected params: * params[tagToPrint] - this should exist and is a digraph
+    // Optional params: * params[metadataTag] 
     // Output params:   * params[tagToPrint + '.gv'] - a GraphViz string ready to print
     simpleDigraph: function(done, params){
       var edges = '';
@@ -236,6 +179,111 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G') {
       params[tagToPrint + '.gv'] = `digraph ${graphName} {
         
         ${sgSubgraph}
+        
+        ${ipSubgraph}
+        
+        ${edges}
+      }`;
+      if(done){
+        return done(params);
+      } else {
+        return params;
+      }
+    },
+    layeredSourceTypes: function(done, params){
+      //In addition to the usual vertices and edges in params[tagToPrint]
+      //we also require params[metadataTag]
+      const CATCHALL_LAYER = 'other';
+      
+      var edges = '';
+      var ips = {};
+      var obj = params[tagToPrint];
+      var metadata = params[metadataTag];
+      var layers = metadata.layers;
+      var colors = metadata.colors;
+      layers.push(CATCHALL_LAYER);
+      colors[CATCHALL_LAYER] = 'white';
+      var vert2layer = metadata.vert2layer;
+
+      var isLayer = layerStr => {
+        for(let layer of layers) {
+          if (layer === layerStr){
+            return true;
+          }
+        }
+        return false;
+      };
+
+      var layerObjs = {};
+      for(let layer of layers){
+        layerObjs[layer] = {};
+      }
+      
+      Object.keys(obj).map(key => {
+        var inEdges = obj[key];
+        inEdges.map(vert => {
+          edges += `
+          "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
+          
+          if(isIpAddress(vert[0])) {
+            ips[vert[0]] = vert[0];
+          }
+          else {
+            let layer = vert2layer[vert[0]];
+            if( isLayer(layer) ){
+              layerObjs[layer][vert[0]] = vert[0];
+            } else {
+              layerObjs[CATCHALL_LAYER][vert[0]] = vert[0];
+            }
+          }
+
+          if(isIpAddress(key)) {
+            ips[key] = key;
+          } else {
+            let layer = vert2layer[key];
+            if( isLayer(layer) ){
+              layerObjs[layer][key] = key;
+            } else {
+              layerObjs[CATCHALL_LAYER][key] = key;
+            }
+          }      
+        });
+      });
+
+      var layerStrs = {};
+      layers.map(layer =>{
+        let layerStr = '';
+        Object.keys(layerObjs[layer]).map(sg => layerStr += ('"' + sg + '";\n'));
+        layerStrs[layer] = layerStr;        
+      });
+      
+      var ipStr = '';
+      Object.keys(ips).map(ip => ipStr += ('"' + ip + '";\n'));
+
+      var clusterNumber = 0;
+      var sgClusters = '';
+      for(let layer of layers){
+        let sgSubgraph = `subgraph cluster_${clusterNumber} {
+          label = "Security Groups Type ${layer}";
+          color=${colors[layer]};
+          node [style=filled, fillcolor=${colors[layer]}];
+          ${layerStrs[layer]}
+        }`;
+        clusterNumber++;
+        sgClusters += '\n' + sgSubgraph;
+      }
+      
+      var ipSubgraph = `subgraph cluster_${clusterNumber} {
+        label = "IP Addresses";
+        style=filled;
+        color=lightgrey;
+        node [style=filled,color=white];
+        ${ipStr}
+      }`;
+      
+      params[tagToPrint + '.gv'] = `digraph ${graphName} {
+        
+        ${sgClusters}
         
         ${ipSubgraph}
         
@@ -319,7 +367,7 @@ var getSGinfo = function(done, params){
       
       obj.AWSobj = val;
       IdDictionary[val.GroupId] = val.GroupName;
-      TypeDictionary[val.GroupId] = obj.Type;
+      TypeDictionary[val.GroupName] = obj.Type;
     });
     params.SecurityGroups = SecurityGroups;
     params.IdDictionary = IdDictionary;
@@ -432,6 +480,22 @@ ASQ(asqParams)
     makePrinter('ConsolidatedSGdigraphIdDictionary'),
     makeGraphVizString('separateSourceTypes', 'ConsolidatedSGdigraphIdDictionary', 'Named_Separated_Graph'),
     makePrinter('ConsolidatedSGdigraphIdDictionary.gv', false),
-    makePrinter('TypeDictionary')
+    makePrinter('TypeDictionary'),
+    (done, params) => {
+      params.sglayers = {
+        layers: ['rds instance', 'ec2 instance', 'personal', 'institution ip', 'service'],
+        colors: {
+          'rds instance': 'blue',
+          'ec2 instance': 'red',
+          'personal': 'green',
+          'institution ip': 'yellow',
+          'service': 'pink'
+        },
+        vert2layer: params.TypeDictionary
+      };
+      done(params);
+    },
+    makeGraphVizString('layeredSourceTypes', 'ConsolidatedSGdigraphIdDictionary', 'Layered_Graph', 'sglayers'),
+    makePrinter('ConsolidatedSGdigraphIdDictionary.gv', false)
   );
 

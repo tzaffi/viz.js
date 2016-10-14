@@ -1,0 +1,161 @@
+digraph Layered_Graph {
+    
+    graph [	size="50,60",
+            ranksep=.75,
+	        page="51,61",
+	        margin="0.25,0.25",
+	        ratio="compress",
+		    orientation="portrait" ];
+		    
+		    {
+node [shape=plaintext, fontsize=16];
+/* the time-line graph */
+6 -> 5 -> 4 -> 3 -> 2 -> 1;
+}
+        
+subgraph cluster_0 {
+          label = "Security Groups Type rds instance";
+          color=blue;
+          node [style=filled, fillcolor=blue];
+          rank = same;
+          1;
+          "Library Purchases DB SG";
+"Moodle DB SG";
+"Lib Display DB SG";
+"DocDel DB SG";
+"Library DB SG";
+"TC CAS DB SG";
+"TC Directory DB SG";
+"Collab DB SG";
+
+        }
+subgraph cluster_1 {
+          label = "Security Groups Type ec2 instance";
+          color=red;
+          node [style=filled, fillcolor=red];
+                    rank = same;
+          2;
+
+          "Purchases SG";
+"Moodle SG";
+"Lib Display SG";
+"Windows DB Management SG";
+"DocDel SG";
+"Library Node Scripts SG";
+"TC Directory SG";
+"Library TCCAS SG";
+"Library Site SG";
+"TC Support SG";
+"Roomer Server SG";
+"Collab SG";
+
+        }
+subgraph cluster_2 {
+          label = "Security Groups Type personal";
+          color=green;
+          node [style=filled, fillcolor=green];
+                    rank = same;
+          3;
+"Zeph Login Library Apps SG";
+"Zhou Login Library Apps SG";
+"Hui Soo Login LIbrary Apps SG";
+"Lingxiao Library Apps SG";
+
+        }
+subgraph cluster_3 {
+          label = "Security Groups Type institution ip";
+          color=yellow;
+          node [style=filled, fillcolor=yellow];
+                    rank = same;
+          4;
+"Columbia SFTP Library Apps SG";
+"Columbia SSH Connect Library Apps SG";
+"Columbia VPN Connect Library Apps SG";
+"Columbia RDC Connect Library Apps SG";
+"Columbia Intranet Web Server Library Apps SG";
+
+        }
+subgraph cluster_4 {
+          label = "Security Groups Type service";
+          color=pink;
+          node [style=filled, fillcolor=pink];
+                    rank = same;
+          5;
+"Web Server Library Apps SG";
+
+        }
+subgraph cluster_5 {
+          label = "Security Groups Type other";
+          color=white;
+                    rank = same;
+          6;
+node [style=filled, fillcolor=white];
+          "EdLab_All_Nginx - Library VPC";
+"NGINX ROUTER DEV IP SG";
+"EdLab_All_Jenkins_VPC";
+
+        }
+        
+        subgraph cluster_6 {
+        label = "IP Addresses";
+        style=filled;
+        color=lightgrey;
+        node [style=filled,color=white];
+                  rank = same;
+          7;
+"160.39.0.0/16";
+"52.201.77.34/32";
+"160.39.94.73/32";
+"160.39.92.73/32";
+"0.0.0.0/0";
+"142.105.35.224/32";
+"160.39.76.166/32";
+"160.39.92.9/32";
+"52.86.49.134/32";
+"52.5.56.77/32";
+"52.87.124.251/32";
+
+      }
+        
+        
+          "Purchases SG" -> "Library Purchases DB SG" [label="3306"];
+          "160.39.0.0/16" -> "Columbia SFTP Library Apps SG" [label="22"];
+          "Moodle SG" -> "Moodle DB SG" [label="3306"];
+          "52.201.77.34/32" -> "EdLab_All_Nginx - Library VPC" [label="65535"];
+          "Lib Display SG" -> "Lib Display DB SG" [label="1433"];
+          "Windows DB Management SG" -> "Lib Display DB SG" [label="1433"];
+          "160.39.94.73/32" -> "Zeph Login Library Apps SG" [label="22"];
+          "160.39.92.73/32" -> "Zeph Login Library Apps SG" [label="3389"];
+          "DocDel SG" -> "DocDel DB SG" [label="1433"];
+          "Library Node Scripts SG" -> "DocDel DB SG" [label="1433"];
+          "Windows DB Management SG" -> "DocDel DB SG" [label="1433"];
+          "TC Directory SG" -> "DocDel DB SG" [label="1433"];
+          "Library TCCAS SG" -> "DocDel DB SG" [label="1433"];
+          "Library Site SG" -> "Library DB SG" [label="3306"];
+          "0.0.0.0/0" -> "Zhou Login Library Apps SG" [label="1433"];
+          "142.105.35.224/32" -> "Zhou Login Library Apps SG" [label="22"];
+          "160.39.76.166/32" -> "Zhou Login Library Apps SG" [label="3389"];
+          "0.0.0.0/0" -> "Web Server Library Apps SG" [label="80, 443"];
+          "Windows DB Management SG" -> "TC CAS DB SG" [label="1433"];
+          "Library TCCAS SG" -> "TC CAS DB SG" [label="1433"];
+          "160.39.0.0/16" -> "Columbia SSH Connect Library Apps SG" [label="22"];
+          "Library Site SG" -> "TC Support SG" [label="3306"];
+          "160.39.92.9/32" -> "Hui Soo Login LIbrary Apps SG" [label="22, 3389"];
+          "Library TCCAS SG" -> "TC Directory DB SG" [label="1433"];
+          "TC Directory SG" -> "TC Directory DB SG" [label="1433"];
+          "Windows DB Management SG" -> "TC Directory DB SG" [label="1433"];
+          "Roomer Server SG" -> "TC Directory DB SG" [label="1433"];
+          "Collab SG" -> "TC Directory DB SG" [label="1433"];
+          "DocDel SG" -> "TC Directory DB SG" [label="1433"];
+          "Library Site SG" -> "TC Directory DB SG" [label="1433"];
+          "Library Node Scripts SG" -> "TC Directory DB SG" [label="1433"];
+          "52.86.49.134/32" -> "NGINX ROUTER DEV IP SG" [label="65535"];
+          "160.39.92.9/32" -> "Lingxiao Library Apps SG" [label="22, 3306"];
+          "52.5.56.77/32" -> "EdLab_All_Jenkins_VPC" [label="ALL"];
+          "52.87.124.251/32" -> "EdLab_All_Jenkins_VPC" [label="ALL"];
+          "160.39.0.0/16" -> "Columbia VPN Connect Library Apps SG" [label="500, 4500"];
+          "160.39.0.0/16" -> "Columbia RDC Connect Library Apps SG" [label="3389"];
+          "160.39.0.0/16" -> "Columbia Intranet Web Server Library Apps SG" [label="80, 443"];
+          "Roomer Server SG" -> "Collab DB SG" [label="3306"];
+          "Collab SG" -> "Collab DB SG" [label="3306"];
+      }

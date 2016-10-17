@@ -193,6 +193,11 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
     layeredSourceTypes: function(done, params){
       //In addition to the usual vertices and edges in params[tagToPrint]
       //we also require params[metadataTag]
+      //   for this graph type, we expect metadata = params[metadataTag] to be on object containing:
+      //      * metadata.vert2layers - map: SG Group Name --> SG Type
+      //      * metadata.layers - array: the ordered values in vert2layers to actually use in layering
+      //      * metadata.colors - map: SG Type --> color
+      //      * metadata.excludes: map: SG Group Name --> itself, of SG Groups NOT to layer
       const CATCHALL_LAYER = 'other';
       
       var edges = '';
@@ -204,7 +209,8 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
       layers.push(CATCHALL_LAYER);
       colors[CATCHALL_LAYER] = 'white';
       var vert2layer = metadata.vert2layer;
-
+      var excludes = metadata.excludes;
+      
       var isLayer = layerStr => {
         for(let layer of layers) {
           if (layer === layerStr){
@@ -230,7 +236,9 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
           }
           else {
             let layer = vert2layer[vert[0]];
-            if( isLayer(layer) ){
+            if( excludes.hasOwnProperty(vert[0]) )
+              layer = CATCHALL_LAYER;
+            if( isLayer(layer)){
               layerObjs[layer][vert[0]] = vert[0];
             } else {
               layerObjs[CATCHALL_LAYER][vert[0]] = vert[0];
@@ -241,6 +249,8 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
             ips[key] = key;
           } else {
             let layer = vert2layer[key];
+            if( excludes.hasOwnProperty(key) )
+              layer = CATCHALL_LAYER;
             if( isLayer(layer) ){
               layerObjs[layer][key] = key;
             } else {
@@ -267,6 +277,8 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
           label = "Security Groups Type ${layer}";
           color=${colors[layer]};
           node [style=filled, fillcolor=${colors[layer]}];
+          rank=same;
+          ${clusterNumber};
           ${layerStrs[layer]}
         }`;
         clusterNumber++;
@@ -278,10 +290,25 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
         style=filled;
         color=lightgrey;
         node [style=filled,color=white];
+        rank=same;
+        ${clusterNumber};
         ${ipStr}
       }`;
       
       params[tagToPrint + '.gv'] = `digraph ${graphName} {
+        graph [page="8.5,11",
+               size="8,10.5",
+               ranksep=1,
+               margin="0.25,0.25",
+               ratio="auto",
+               orientation="portrait" ];
+
+        {
+          /* impose the expected dependency order  */
+          node [shape=plaintext, fontsize=16, style="invis"];
+          edge [style="invis"];
+          6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0;
+        }      
         
         ${sgClusters}
         
@@ -491,7 +518,8 @@ ASQ(asqParams)
           'institution ip': 'yellow',
           'service': 'pink'
         },
-        vert2layer: params.TypeDictionary
+        vert2layer: params.TypeDictionary,
+        excludes: { 'TC Support SG': 'TC Support SG' }
       };
       done(params);
     },

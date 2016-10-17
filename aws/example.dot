@@ -1,16 +1,16 @@
 digraph Layered_Graph {
     
-    graph [	size="50,60",
-            ranksep=.75,
-	        page="51,61",
+    graph [	page="8.5,11",
+            size="8,10.5",
+            ranksep=3,
 	        margin="0.25,0.25",
-	        ratio="compress",
+	        ratio="auto",
 		    orientation="portrait" ];
 		    
 		    {
 node [shape=plaintext, fontsize=16];
 /* the time-line graph */
-6 -> 5 -> 4 -> 3 -> 2 -> 1;
+7 -> 6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0;
 }
         
 subgraph cluster_0 {
@@ -18,7 +18,7 @@ subgraph cluster_0 {
           color=blue;
           node [style=filled, fillcolor=blue];
           rank = same;
-          1;
+          0;
           "Library Purchases DB SG";
 "Moodle DB SG";
 "Lib Display DB SG";
@@ -27,9 +27,20 @@ subgraph cluster_0 {
 "TC CAS DB SG";
 "TC Directory DB SG";
 "Collab DB SG";
-
         }
+
 subgraph cluster_1 {
+          label = "Security Groups Type ec2 instance";
+          color=red;
+          node [style=filled, fillcolor=red];
+                    rank = same;
+          1;
+
+"TC Support SG";
+        }
+
+        
+subgraph cluster_2 {
           label = "Security Groups Type ec2 instance";
           color=red;
           node [style=filled, fillcolor=red];
@@ -45,12 +56,11 @@ subgraph cluster_1 {
 "TC Directory SG";
 "Library TCCAS SG";
 "Library Site SG";
-"TC Support SG";
 "Roomer Server SG";
 "Collab SG";
-
         }
-subgraph cluster_2 {
+        
+subgraph cluster_3 {
           label = "Security Groups Type personal";
           color=green;
           node [style=filled, fillcolor=green];
@@ -62,7 +72,8 @@ subgraph cluster_2 {
 "Lingxiao Library Apps SG";
 
         }
-subgraph cluster_3 {
+        
+subgraph cluster_4 {
           label = "Security Groups Type institution ip";
           color=yellow;
           node [style=filled, fillcolor=yellow];
@@ -73,18 +84,18 @@ subgraph cluster_3 {
 "Columbia VPN Connect Library Apps SG";
 "Columbia RDC Connect Library Apps SG";
 "Columbia Intranet Web Server Library Apps SG";
-
         }
-subgraph cluster_4 {
+        
+subgraph cluster_5 {
           label = "Security Groups Type service";
           color=pink;
           node [style=filled, fillcolor=pink];
                     rank = same;
           5;
 "Web Server Library Apps SG";
-
         }
-subgraph cluster_5 {
+        
+subgraph cluster_6 {
           label = "Security Groups Type other";
           color=white;
                     rank = same;
@@ -96,7 +107,7 @@ node [style=filled, fillcolor=white];
 
         }
         
-        subgraph cluster_6 {
+subgraph cluster_7 {
         label = "IP Addresses";
         style=filled;
         color=lightgrey;

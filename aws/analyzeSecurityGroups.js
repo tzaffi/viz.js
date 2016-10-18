@@ -23,7 +23,7 @@ var isSgAddress = function(addr){
 };
 
 
-/******************* Asqx functions 
+/******************* ASQ functions 
  * To make it a little easier to program and plug and play, 
  * we specify some conventions for how Asynquence-compatible
  * functions should be declared and writted:
@@ -326,6 +326,78 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
   return functionCatalog[printerType];
 };
 
+// Query the running EC2 instances from AWS and store in an object.
+//
+// Expected params: * params.VpcId - the vpcId: if null take all VPC's
+// Output params:   * params.EC2instances - EC2 instances for the given VPC
+var getEC2info = function(done, params){
+  var awsParams = {
+    DryRun: false
+  };
+  
+  if (!params.VpcId){
+    params.VpcId = null;
+  } else {
+    awsParams.Filters =  [
+      {
+        Name: 'vpc-id',
+        Values: [ params.VpcId ]
+      },
+      {
+        Name: 'instance-state-name',
+        Values: [ 'running' ]
+      }
+    ];
+  }
+  var flattenComplexAWSstructure = function(data){
+    var reservations = data.Reservations;
+    var instances = reservations
+        .map( reservation => reservation.Instances )
+        .reduce( (x,y) => x.concat(y) );
+    
+    params.EC2instances = instances;
+    done(params);
+  };
+  
+  ec2.describeInstances(awsParams, function(err, data) {
+    if (err) {
+      console.log(err, err.stack);
+      done.fail(err);
+    } else {
+      flattenComplexAWSstructure(data);
+    }
+  });
+};
+
+// Add EC2 info to SG digraph. If no previous digraph is specified,
+// create new digraph WITHOUT exernal SG info.
+//
+// ec2InfoTag - params[ec2InfoTag] is the array that is expected to store the EC2 info
+// resultingDigraphTag - store the resulting digraph in params[resultingDigraphTag]
+// sgDigraphTag - params[sgDigraphTag] is the pre-existing digraph to add to. Defaults to null.
+var makeEC2digraphAdder = function( ec2InfoTag, resultingDigraphTag, sgDigraphTag = null ){
+  var getEC2instanceName = instance => instance.Tags.find(tagObj => tagObj.Key === 'Name').Value;
+
+  // Expected params: * params[ec2InfoTag] 
+  //                  * params[sgDigraphTag] - if sgDigraphTag is not null
+  // Output params:   * params[resultingDigraphTag] - the outputted digraph
+  return function addEC2digraph(done, params){
+    var resultingDigraph = (sgDigraphTag === null ? {} : params[sgDigraphTag]);
+    var instances = params[ec2InfoTag];
+    instances.map( instance => {
+      var name = getEC2instanceName(instance);
+      var instanceKey = `EC2: ${name}`;
+      if( !resultingDigraph[instanceKey] ){
+        resultingDigraph[instanceKey] = [];
+      }
+      instance.SecurityGroups.map(sg => resultingDigraph[instanceKey].push([sg.GroupName, 'EC2']));
+    });
+
+    params[resultingDigraphTag] = resultingDigraph;
+    done(params);
+  };
+};
+
 // Query the Security Groups from AWS and store in an object.
 // If no 
 // is formatted as expected. Can also be used a basis for making more complex and
@@ -407,7 +479,7 @@ var getSGinfo = function(done, params){
       console.log(err, err.stack);
       done.fail(err);
     } else {
-      prepareSGdigraph(data, console.log);
+      prepareSGdigraph(data);
     }
   });
 };
@@ -492,6 +564,8 @@ var asqParams = { VpcId: 'vpc-76d49213' };
 ASQ(asqParams)
   .then(
     getSGinfo,
+    getEC2info,
+    makePrinter('EC2instances'),
     makePrinter('SecurityGroups'),
     makePrinter('IdDictionary'),
     makeSimpleSGgraph,
@@ -524,6 +598,7 @@ ASQ(asqParams)
       done(params);
     },
     makeGraphVizString('layeredSourceTypes', 'ConsolidatedSGdigraphIdDictionary', 'Layered_Graph', 'sglayers'),
-    makePrinter('ConsolidatedSGdigraphIdDictionary.gv', false)
+    makePrinter('ConsolidatedSGdigraphIdDictionary.gv', false),
+    makeEC2digraphAdder('EC2instances', 'PlusEC2', 'ConsolidatedSGdigraphIdDictionary'),
+    makePrinter('PlusEC2', true)
   );
-

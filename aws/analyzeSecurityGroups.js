@@ -17,6 +17,11 @@ var isIpAddress = function(addr){
   return addr.match(threeDots) ? true : false;
 };
 
+var isEC2instance = function(addr){
+  var startsWithEC2colon = /^EC2:/;
+  return addr.match(startsWithEC2colon) ? true : false;
+};
+
 var isSgAddress = function(addr){
   var sgMatcher = /^sg-/;
   return addr.match(sgMatcher) ? true : false;
@@ -194,7 +199,7 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
       //In addition to the usual vertices and edges in params[tagToPrint]
       //we also require params[metadataTag]
       //   for this graph type, we expect metadata = params[metadataTag] to be on object containing:
-      //      * metadata.vert2layers - map: SG Group Name --> SG Type
+      //      * metadata.vert2layer - map: SG Group Name --> SG Type
       //      * metadata.layers - array: the ordered values in vert2layers to actually use in layering
       //      * metadata.colors - map: SG Type --> color
       //      * metadata.excludes: map: SG Group Name --> itself, of SG Groups NOT to layer
@@ -202,6 +207,7 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
       
       var edges = '';
       var ips = {};
+      var ec2s = {};
       var obj = params[tagToPrint];
       var metadata = params[metadataTag];
       var layers = metadata.layers;
@@ -224,39 +230,31 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
       for(let layer of layers){
         layerObjs[layer] = {};
       }
+
+      var addVertexAndEdges = function(v){
+        if(isIpAddress(v)) {
+          ips[v] = v;
+        } else if(isEC2instance(v)) {
+          ec2s[v] = v;
+        } else {
+          let layer = vert2layer[v];
+          if( excludes.hasOwnProperty(v) )
+            layer = CATCHALL_LAYER;
+          if( isLayer(layer) ){
+            layerObjs[layer][v] = v;
+          } else {
+            layerObjs[CATCHALL_LAYER][v] = v;
+          }
+        }      
+      };
       
       Object.keys(obj).map(key => {
         var inEdges = obj[key];
         inEdges.map(vert => {
           edges += `
           "${vert[0]}" -> "${key}" [label="${vert[1]}"];`;
-          
-          if(isIpAddress(vert[0])) {
-            ips[vert[0]] = vert[0];
-          }
-          else {
-            let layer = vert2layer[vert[0]];
-            if( excludes.hasOwnProperty(vert[0]) )
-              layer = CATCHALL_LAYER;
-            if( isLayer(layer)){
-              layerObjs[layer][vert[0]] = vert[0];
-            } else {
-              layerObjs[CATCHALL_LAYER][vert[0]] = vert[0];
-            }
-          }
-
-          if(isIpAddress(key)) {
-            ips[key] = key;
-          } else {
-            let layer = vert2layer[key];
-            if( excludes.hasOwnProperty(key) )
-              layer = CATCHALL_LAYER;
-            if( isLayer(layer) ){
-              layerObjs[layer][key] = key;
-            } else {
-              layerObjs[CATCHALL_LAYER][key] = key;
-            }
-          }      
+          addVertexAndEdges(vert[0]);
+          addVertexAndEdges(key);
         });
       });
 
@@ -270,7 +268,22 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
       var ipStr = '';
       Object.keys(ips).map(ip => ipStr += ('"' + ip + '";\n'));
 
+      var ec2str = '';
+      Object.keys(ec2s).map(ec2 => ec2str += ('"' + ec2 + '";\n'));
+
       var clusterNumber = 0;
+
+      var ec2subgraph = `subgraph cluster_${clusterNumber} {
+        label = "EC2 Boxes";
+        style=filled;
+        color=cornsilk;
+        node [style=filled,color=pink];
+        rank=same;
+        ${clusterNumber};
+        ${ec2str}
+      }`;
+      clusterNumber++;
+
       var sgClusters = '';
       for(let layer of layers){
         let sgSubgraph = `subgraph cluster_${clusterNumber} {
@@ -307,9 +320,11 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
           /* impose the expected dependency order  */
           node [shape=plaintext, fontsize=16, style="invis"];
           edge [style="invis"];
-          6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0;
+          8 -> 7 -> 6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0;
         }      
         
+        ${ec2subgraph}
+
         ${sgClusters}
         
         ${ipSubgraph}
@@ -371,26 +386,44 @@ var getEC2info = function(done, params){
 
 // Add EC2 info to SG digraph. If no previous digraph is specified,
 // create new digraph WITHOUT exernal SG info.
+// Note, edges connecting getween <SG of type ec2 instance> and <EC2: box> are reversed
+// for clarity (as these types of SG's are used to connect OUT of the box)
 //
 // ec2InfoTag - params[ec2InfoTag] is the array that is expected to store the EC2 info
+// metadataTag - params[metadataTag] - in particular we need metadata.vert2layer so we can tell the type of our SG and reverse the edge
 // resultingDigraphTag - store the resulting digraph in params[resultingDigraphTag]
 // sgDigraphTag - params[sgDigraphTag] is the pre-existing digraph to add to. Defaults to null.
-var makeEC2digraphAdder = function( ec2InfoTag, resultingDigraphTag, sgDigraphTag = null ){
+var makeEC2digraphAdder = function( ec2InfoTag, metadataTag, resultingDigraphTag, sgDigraphTag = null ){
   var getEC2instanceName = instance => instance.Tags.find(tagObj => tagObj.Key === 'Name').Value;
 
-  // Expected params: * params[ec2InfoTag] 
+  // Expected params: * params[ec2InfoTag]
+  //                  * params[metadataTag]
   //                  * params[sgDigraphTag] - if sgDigraphTag is not null
   // Output params:   * params[resultingDigraphTag] - the outputted digraph
   return function addEC2digraph(done, params){
     var resultingDigraph = (sgDigraphTag === null ? {} : params[sgDigraphTag]);
     var instances = params[ec2InfoTag];
+    var vert2layer = params[metadataTag].vert2layer;
+    
     instances.map( instance => {
       var name = getEC2instanceName(instance);
       var instanceKey = `EC2: ${name}`;
-      if( !resultingDigraph[instanceKey] ){
-        resultingDigraph[instanceKey] = [];
-      }
-      instance.SecurityGroups.map(sg => resultingDigraph[instanceKey].push([sg.GroupName, 'EC2']));
+      
+      instance.SecurityGroups.map(sg => {
+        var fromSGtoEC2 = (vert2layer[sg.GroupName] === 'ec2 instance');
+        if (fromSGtoEC2) {
+          if( !resultingDigraph[sg.GroupName] ){
+            resultingDigraph[sg.GroupName] = [];
+          }
+          resultingDigraph[sg.GroupName].push([instanceKey, 'EC2']);
+        } else {
+          if( !resultingDigraph[instanceKey] ){
+            resultingDigraph[instanceKey] = [];
+          }
+          resultingDigraph[instanceKey].push([sg.GroupName, 'EC2']);
+        }
+      });
+      
     });
 
     params[resultingDigraphTag] = resultingDigraph;
@@ -599,6 +632,8 @@ ASQ(asqParams)
     },
     makeGraphVizString('layeredSourceTypes', 'ConsolidatedSGdigraphIdDictionary', 'Layered_Graph', 'sglayers'),
     makePrinter('ConsolidatedSGdigraphIdDictionary.gv', false),
-    makeEC2digraphAdder('EC2instances', 'PlusEC2', 'ConsolidatedSGdigraphIdDictionary'),
-    makePrinter('PlusEC2', true)
+    makeEC2digraphAdder('EC2instances', 'sglayers', 'PlusEC2', 'ConsolidatedSGdigraphIdDictionary'),
+    makePrinter('PlusEC2', true),
+    makeGraphVizString('layeredSourceTypes', 'PlusEC2', 'EC2_Layered_Graph', 'sglayers'),
+    makePrinter('PlusEC2.gv', false)
   );

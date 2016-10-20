@@ -4,6 +4,7 @@ var AWS = require('aws-sdk');
 AWS.config.loadFromPath('./config.json');
 
 var ec2 = new AWS.EC2();
+var rds = new AWS.RDS();
 
 /************ HELPERS ***********/
 var object2array = function(obj){
@@ -212,8 +213,10 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
       var metadata = params[metadataTag];
       var layers = metadata.layers;
       var colors = metadata.colors;
-      layers.push(CATCHALL_LAYER);
-      colors[CATCHALL_LAYER] = 'white';
+      if (!layers.find(x => x === CATCHALL_LAYER)) {
+        layers.push(CATCHALL_LAYER);
+        colors[CATCHALL_LAYER] = 'white';
+      }
       var vert2layer = metadata.vert2layer;
       var excludes = metadata.excludes;
       
@@ -320,7 +323,7 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
           /* impose the expected dependency order  */
           node [shape=plaintext, fontsize=16, style="invis"];
           edge [style="invis"];
-          8 -> 7 -> 6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0;
+          7 -> 6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0;
         }      
         
         ${ec2subgraph}
@@ -384,6 +387,35 @@ var getEC2info = function(done, params){
   });
 };
 
+
+
+// Query the RDS instances from AWS and store in an object.
+//
+// Expected params: * params.VpcId - the vpcId: if null take all VPC's
+// Output params:   * params.RDSinstances - RDS instances for the given VPC
+//
+// NOTE: if you filter by VPC ID, you will not get any of the old pre-VPC RDS instances.
+var getRDSinfo = function(done, params){
+  var flattenComplexAWSstructure = function(data){
+    var instances = data.DBInstances;
+    if(params.VpcId){
+      instances = instances.filter(instance => instance.DBSubnetGroup && instance.DBSubnetGroup.VpcId === params.VpcId);
+    }
+    params.RDSinstances = instances;
+    done(params);
+  };
+  
+  var awsParams = {};
+  rds.describeDBInstances(awsParams, function(err, data) {
+    if (err) {
+      console.log(err, err.stack);
+      done.fail(err);
+    } else {
+      flattenComplexAWSstructure(data);      
+    }
+  });
+};
+
 // Add EC2 info to SG digraph. If no previous digraph is specified,
 // create new digraph WITHOUT exernal SG info.
 // Note, edges connecting getween <SG of type ec2 instance> and <EC2: box> are reversed
@@ -410,8 +442,8 @@ var makeEC2digraphAdder = function( ec2InfoTag, metadataTag, resultingDigraphTag
       var instanceKey = `EC2: ${name}`;
       
       instance.SecurityGroups.map(sg => {
-        var fromSGtoEC2 = (vert2layer[sg.GroupName] === 'ec2 instance');
-        if (fromSGtoEC2) {
+        var fromEC2toSG = (vert2layer[sg.GroupName] === 'ec2 instance');
+        if (fromEC2toSG) {
           if( !resultingDigraph[sg.GroupName] ){
             resultingDigraph[sg.GroupName] = [];
           }
@@ -421,6 +453,51 @@ var makeEC2digraphAdder = function( ec2InfoTag, metadataTag, resultingDigraphTag
             resultingDigraph[instanceKey] = [];
           }
           resultingDigraph[instanceKey].push([sg.GroupName, 'EC2']);
+        }
+      });
+      
+    });
+
+    params[resultingDigraphTag] = resultingDigraph;
+    done(params);
+  };
+};
+
+// Add RDS info to SG digraph. If no previous digraph is specified,
+// create new digraph WITHOUT exernal SG info.
+// Note, edges connecting getween <SG of type rds instance> and <RDS: box> are reversed
+// for clarity (as these types of SG's are used to connect OUT of the box)
+//
+// rdsInfoTag - params[rdsInfoTag] is the array that is expected to store the RDS info
+// metadataTag - params[metadataTag] - in particular we need metadata.vert2layer so we can tell the type of our SG and reverse the edge
+// resultingDigraphTag - store the resulting digraph in params[resultingDigraphTag]
+// sgDigraphTag - params[sgDigraphTag] is the pre-existing digraph to add to. Defaults to null.
+var makeRDSdigraphAdder = function( rdsInfoTag, metadataTag, resultingDigraphTag, sgDigraphTag = null ){
+  // Expected params: * params[rdsInfoTag]
+  //                  * params[metadataTag]
+  //                  * params[sgDigraphTag] - if sgDigraphTag is not null
+  // Output params:   * params[resultingDigraphTag] - the outputted digraph
+  return function addRDSdigraph(done, params){
+    var resultingDigraph = (sgDigraphTag === null ? {} : params[sgDigraphTag]);
+    var instances = params[rdsInfoTag];
+    var vert2layer = params[metadataTag].vert2layer;
+    
+    instances.map( instance => {
+      var name = instance.DBInstanceIdentifier;
+      var instanceKey = `RDS: ${name}`;
+      
+      instance.VpcSecurityGroups.map(sg => {
+        var fromSGtoRDS = (vert2layer[sg.Type] === 'rds instance');
+        if (fromSGtoRDS) {
+          if( !resultingDigraph[sg.GroupName] ){
+            resultingDigraph[sg.GroupName] = [];
+          }
+          resultingDigraph[sg.GroupName].push([instanceKey, 'RDS']);
+        } else {
+          if( !resultingDigraph[instanceKey] ){
+            resultingDigraph[instanceKey] = [];
+          }
+          resultingDigraph[instanceKey].push([sg.GroupName, 'RDS']);
         }
       });
       
@@ -598,6 +675,8 @@ ASQ(asqParams)
   .then(
     getSGinfo,
     getEC2info,
+    getRDSinfo,
+    makePrinter('RDSinstances'),
     makePrinter('EC2instances'),
     makePrinter('SecurityGroups'),
     makePrinter('IdDictionary'),
@@ -635,5 +714,8 @@ ASQ(asqParams)
     makeEC2digraphAdder('EC2instances', 'sglayers', 'PlusEC2', 'ConsolidatedSGdigraphIdDictionary'),
     makePrinter('PlusEC2', true),
     makeGraphVizString('layeredSourceTypes', 'PlusEC2', 'EC2_Layered_Graph', 'sglayers'),
-    makePrinter('PlusEC2.gv', false)
+    makePrinter('PlusEC2.gv', false)//,
+//    makeRDSdigraphAdder('RDSinstances', 'sglayers', 'PlusEC2plusRDS', 'PlusEC2'),
+//    makePrinter('PlusEC2plusRDS', true)//,
+//    makeGraphVizString('layeredSourceTypes', 'PlusEC2plusRDS', 'RDS_EC2_Layered_Graph', 'sglayers')
   );

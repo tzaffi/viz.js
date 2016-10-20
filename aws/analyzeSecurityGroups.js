@@ -23,6 +23,11 @@ var isEC2instance = function(addr){
   return addr.match(startsWithEC2colon) ? true : false;
 };
 
+var isRDSinstance = function(addr){
+  var startsWithRDScolon = /^RDS:/;
+  return addr.match(startsWithRDScolon) ? true : false;
+};
+
 var isSgAddress = function(addr){
   var sgMatcher = /^sg-/;
   return addr.match(sgMatcher) ? true : false;
@@ -209,6 +214,7 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
       var edges = '';
       var ips = {};
       var ec2s = {};
+      var rdses = {};
       var obj = params[tagToPrint];
       var metadata = params[metadataTag];
       var layers = metadata.layers;
@@ -239,6 +245,8 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
           ips[v] = v;
         } else if(isEC2instance(v)) {
           ec2s[v] = v;
+        } else if(isRDSinstance(v)) {
+          rdses[v] = v;
         } else {
           let layer = vert2layer[v];
           if( excludes.hasOwnProperty(v) )
@@ -274,7 +282,21 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
       var ec2str = '';
       Object.keys(ec2s).map(ec2 => ec2str += ('"' + ec2 + '";\n'));
 
+      var rdsStr = '';
+      Object.keys(rdses).map(rds => rdsStr += ('"' + rds + '";\n'));
+
       var clusterNumber = 0;
+
+      var rdsSubgraph = `subgraph cluster_${clusterNumber} {
+        label = "RDS Databases";
+        style=filled;
+        color=gray32;
+        node [style=filled,color=pink];
+        rank=same;
+        ${clusterNumber};
+        ${rdsStr}
+      }`;
+      clusterNumber++;
 
       var ec2subgraph = `subgraph cluster_${clusterNumber} {
         label = "EC2 Boxes";
@@ -323,8 +345,10 @@ var makeGraphVizString = function(printerType, tagToPrint, graphName = 'G', meta
           /* impose the expected dependency order  */
           node [shape=plaintext, fontsize=16, style="invis"];
           edge [style="invis"];
-          7 -> 6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0;
+          8 -> 7 -> 6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0;
         }      
+
+        ${rdsSubgraph}
         
         ${ec2subgraph}
 
@@ -476,33 +500,36 @@ var makeRDSdigraphAdder = function( rdsInfoTag, metadataTag, resultingDigraphTag
   // Expected params: * params[rdsInfoTag]
   //                  * params[metadataTag]
   //                  * params[sgDigraphTag] - if sgDigraphTag is not null
+  //                  * params.IdDictionary 
   // Output params:   * params[resultingDigraphTag] - the outputted digraph
   return function addRDSdigraph(done, params){
     var resultingDigraph = (sgDigraphTag === null ? {} : params[sgDigraphTag]);
     var instances = params[rdsInfoTag];
     var vert2layer = params[metadataTag].vert2layer;
+    var sgid2name = params.IdDictionary;
     
     instances.map( instance => {
       var name = instance.DBInstanceIdentifier;
       var instanceKey = `RDS: ${name}`;
-      
+
       instance.VpcSecurityGroups.map(sg => {
-        var fromSGtoRDS = (vert2layer[sg.Type] === 'rds instance');
-        if (fromSGtoRDS) {
-          if( !resultingDigraph[sg.GroupName] ){
-            resultingDigraph[sg.GroupName] = [];
+        var sgName = sgid2name[sg.VpcSecurityGroupId];
+        var fromRDStoSG = false; //(vert2layer[sgName] === 'rds instance');
+        if (fromRDStoSG) {
+          if( !resultingDigraph[sgName] ){
+            resultingDigraph[sgName] = [];
           }
-          resultingDigraph[sg.GroupName].push([instanceKey, 'RDS']);
+          resultingDigraph[sgName].push([instanceKey, 'RDS']);
         } else {
           if( !resultingDigraph[instanceKey] ){
             resultingDigraph[instanceKey] = [];
           }
-          resultingDigraph[instanceKey].push([sg.GroupName, 'RDS']);
+          resultingDigraph[instanceKey].push([sgName, 'RDS']);
         }
       });
       
     });
-
+    
     params[resultingDigraphTag] = resultingDigraph;
     done(params);
   };
@@ -714,8 +741,9 @@ ASQ(asqParams)
     makeEC2digraphAdder('EC2instances', 'sglayers', 'PlusEC2', 'ConsolidatedSGdigraphIdDictionary'),
     makePrinter('PlusEC2', true),
     makeGraphVizString('layeredSourceTypes', 'PlusEC2', 'EC2_Layered_Graph', 'sglayers'),
-    makePrinter('PlusEC2.gv', false)//,
-//    makeRDSdigraphAdder('RDSinstances', 'sglayers', 'PlusEC2plusRDS', 'PlusEC2'),
-//    makePrinter('PlusEC2plusRDS', true)//,
-//    makeGraphVizString('layeredSourceTypes', 'PlusEC2plusRDS', 'RDS_EC2_Layered_Graph', 'sglayers')
+    makePrinter('PlusEC2.gv', false),
+    makeRDSdigraphAdder('RDSinstances', 'sglayers', 'PlusEC2plusRDS', 'PlusEC2'),
+    makePrinter('PlusEC2plusRDS', true),
+    makeGraphVizString('layeredSourceTypes', 'PlusEC2plusRDS', 'RDS_EC2_Layered_Graph', 'sglayers'),
+    makePrinter('PlusEC2plusRDS.gv', false)
   );

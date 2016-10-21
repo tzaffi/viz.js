@@ -1,6 +1,6 @@
 const vpcsToAnalyze = new Map([
-  ['EdLab Apps', { VpcId: 'vpc-79fa251c', File: 'EdLabApps.gv' }],
-  ['Library Apps', { VpcId: 'vpc-76d49213', File: 'LibraryApps.gv' }]
+  ['EdLab Apps', { VpcId: 'vpc-79fa251c', File: 'EdLabApps' }],
+  ['Library Apps', { VpcId: 'vpc-76d49213', File: 'LibraryApps' }]
 ]);
 
 const ASQ = require('asynquence-contrib');
@@ -13,7 +13,8 @@ const getSGinfo = lib.getSGinfo;
 const makeEC2digraphAdder = lib.makeEC2digraphAdder;
 const makeGraphTranslator = lib.makeGraphTranslator;
 const makeGraphVizString = lib.makeGraphVizString;
-const makePrinter = lib.makePrinter;
+const makeGV2SVGtranslator = lib.makeGV2SVGtranslator;
+const makeFileWriter = lib.makeFileWriter;
 const makeRDSdigraphAdder = lib.makeRDSdigraphAdder;
 const makeSimpleSGgraph = lib.makeSimpleSGgraph;
 
@@ -44,7 +45,8 @@ var makeGraphViz = function(params){
     makeEC2digraphAdder('EC2instances', 'sglayers', 'PlusEC2', 'ConsolidatedSGdigraphIdDictionary'),
     makeRDSdigraphAdder('RDSinstances', 'sglayers', 'PlusEC2plusRDS', 'PlusEC2'),
     makeGraphVizString('layeredSourceTypes', 'PlusEC2plusRDS', 'RDS_EC2_Layered_Graph', 'sglayers'),
-    makePrinter('PlusEC2plusRDS.gv', false, false)
+    makeFileWriter('PlusEC2plusRDS.gv', params.File),
+    makeGV2SVGtranslator(params.File)
   );
 };
 
@@ -52,3 +54,4 @@ for (let [vpcName, asqParams] of vpcsToAnalyze) {
   console.log(`CREATING GraphViz Analysis of ${vpcName}`);
   makeGraphViz(asqParams);
 }
+console.log('Find the latest HTML files created with "ls -ltr svg/"');

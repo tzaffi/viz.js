@@ -1,3 +1,6 @@
+var fs = require('fs');
+var exec = require('child_process').exec;
+var moment = require('moment');
 var AWS = require('aws-sdk');
 AWS.config.loadFromPath('./config.json');
 
@@ -104,6 +107,65 @@ module.exports = {
                     ` : '');
       console.log(`${header}${printObj}`);
       done(params);
+    };
+  },
+
+  // Create an asq compatible file writer for a particular part of params
+  // with given print options:
+  makeFileWriter: function(tagToPrint, filePrefix, addTimeStamp = true, useJSONstringify = false, addHeader = false){
+    // Expected params: * params[tagToPrint] - this should exist
+    // Output params:   * params.gvFilesCreated : map from filePrefix --> actual file path
+    var timeStamp = ( addTimeStamp ? ('_' + moment().format() ) : '' );
+    var filePath = `./gv/${filePrefix}${timeStamp}.gv`;
+    return function printer(done, params){
+      var printObj = params[tagToPrint];
+      if(useJSONstringify) {
+        printObj = JSON.stringify(printObj, null, 2);
+      }
+      var header = (addHeader ? `
+                  ________________________________________________________________________
+                  ${tagToPrint}:
+                    ________________________________________________________________________
+                    ` : '');
+      var strToWrite = `${header}${printObj}`;
+      fs.writeFile(filePath, strToWrite, err => {
+        if(err)
+          done.fail(err);
+        else {
+          if( !params.gvFilesCreated )
+            params.gvFilesCreated = {};
+          params.gvFilesCreated[filePrefix] = filePath;
+          done(params);
+        }
+      });
+    };
+  },
+
+
+  // Create an asq compatible file writer for a particular part of params
+  // with given print options:
+  makeGV2SVGtranslator: function(filePrefix){
+    // Expected params: * params.gvFilesCreated[filePrefix] - which points to the actual .gv path
+    // Output params:   * params.svgFilesCreated : map from filePrefix --> actual file path
+    //                  * params.exec - which contains data for each command run
+    return function printer(done, params){
+      var gvFilePath = params.gvFilesCreated[filePrefix];
+      var svgFilePath = `./svg/${gvFilePath.split('/')[2].split('.')[0]}.html`;
+      var cmd = `dot -Tsvg ${gvFilePath} > ${svgFilePath}`;
+      exec(cmd, (error, stdout, stderr) => {
+        if(error)
+          done.fail(error);
+        else {
+          if( !params.exec )
+            params.exec = {};
+          params.exec[filePrefix] = {
+            'cmd': cmd,
+            'stdout': stdout,
+            'stderr': stderr
+          };
+          done(params);
+        }
+      });
     };
   },
 

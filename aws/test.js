@@ -1,8 +1,3 @@
-const vpcsToAnalyze = new Map([
-  ['EdLab Apps', { VpcId: 'vpc-79fa251c', File: 'EdLabApps.gv' }],
-  ['Library Apps', { VpcId: 'vpc-76d49213', File: 'LibraryApps.gv' }]
-]);
-
 const ASQ = require('asynquence-contrib');
 const lib = require('./lib.js');
 
@@ -17,15 +12,30 @@ const makePrinter = lib.makePrinter;
 const makeRDSdigraphAdder = lib.makeRDSdigraphAdder;
 const makeSimpleSGgraph = lib.makeSimpleSGgraph;
 
-var makeGraphViz = function(params){
+var testFlow = function(params){
   ASQ(params)
   .then(
     getSGinfo,
     getEC2info,
     getRDSinfo,
+    makePrinter('RDSinstances'),
+    makePrinter('EC2instances'),
+    makePrinter('SecurityGroups'),
+    makePrinter('IdDictionary'),
     makeSimpleSGgraph,
+    makePrinter('SimpleSGdigraph'),
+    makeGraphVizString('simpleDigraph', 'SimpleSGdigraph', 'Simple_Graph'),
+    makePrinter('SimpleSGdigraph.gv', false),
     consolidateSimpleSGgraphLabels,
+    makeGraphVizString('simpleDigraph', 'ConsolidatedSGdigraph', 'Consolidated_Graph'),
+    makePrinter('ConsolidatedSGdigraph.gv', false),
+    makeGraphVizString('separateSourceTypes', 'ConsolidatedSGdigraph', 'Separated_Graph'),
+    makePrinter('ConsolidatedSGdigraph.gv', false),
     makeGraphTranslator('ConsolidatedSGdigraph', 'IdDictionary'),
+    makePrinter('ConsolidatedSGdigraphIdDictionary'),
+    makeGraphVizString('separateSourceTypes', 'ConsolidatedSGdigraphIdDictionary', 'Named_Separated_Graph'),
+    makePrinter('ConsolidatedSGdigraphIdDictionary.gv', false),
+    makePrinter('TypeDictionary'),
     (done, params) => {
       params.sglayers = {
         layers: ['rds instance', 'ec2 instance', 'personal', 'institution ip', 'service'],
@@ -41,14 +51,19 @@ var makeGraphViz = function(params){
       };
       done(params);
     },
+    makeGraphVizString('layeredSourceTypes', 'ConsolidatedSGdigraphIdDictionary', 'Layered_Graph', 'sglayers'),
+    makePrinter('ConsolidatedSGdigraphIdDictionary.gv', false),
     makeEC2digraphAdder('EC2instances', 'sglayers', 'PlusEC2', 'ConsolidatedSGdigraphIdDictionary'),
+    makePrinter('PlusEC2', true),
+    makeGraphVizString('layeredSourceTypes', 'PlusEC2', 'EC2_Layered_Graph', 'sglayers'),
+    makePrinter('PlusEC2.gv', false),
     makeRDSdigraphAdder('RDSinstances', 'sglayers', 'PlusEC2plusRDS', 'PlusEC2'),
+    makePrinter('PlusEC2plusRDS', true),
     makeGraphVizString('layeredSourceTypes', 'PlusEC2plusRDS', 'RDS_EC2_Layered_Graph', 'sglayers'),
-    makePrinter('PlusEC2plusRDS.gv', false, false)
+    makePrinter('PlusEC2plusRDS.gv', false)
   );
 };
 
-for (let [vpcName, asqParams] of vpcsToAnalyze) {
-  console.log(`CREATING GraphViz Analysis of ${vpcName}`);
-  makeGraphViz(asqParams);
-}
+var asqParams = { VpcId: 'vpc-76d49213' }; //Library Apps
+asqParams = { VpcId: 'vpc-79fa251c' };     //EdLab Apps
+testFlow(asqParams);

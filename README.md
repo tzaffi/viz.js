@@ -1,3 +1,9 @@
+# AWS Security Groups Visualization
+
+I really ought to break the `./aws` project out on its own. But I was inspired by this project (thank you [mdaines](https://github.com/mdaines) ) and stuck my work inside.
+
+See [the AWS REAMDE](./aws/READMEM.md) for more details.
+
 # Viz.js
 
 This project is a Makefile for building Graphviz with Emscripten and a simple wrapper for using it in the browser.

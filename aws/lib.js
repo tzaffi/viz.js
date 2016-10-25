@@ -7,6 +7,10 @@ AWS.config.loadFromPath('./config.json');
 var ec2 = new AWS.EC2();
 var rds = new AWS.RDS();
 
+const GV_PATH = './reports/archive/gv/';
+const SVG_PATH = './reports/archive/svg/';
+const HTML_PATH = './reports/';
+
 /************ HELPERS ***********/
 var object2array = function(obj){
   var arr = [];
@@ -90,6 +94,13 @@ var doublerAndTripler = function(done, params){
 *********************/
 
 module.exports = {
+  //constants:
+  GV_PATH: GV_PATH,
+  SVG_PATH: SVG_PATH,
+  HTML_PATH: HTML_PATH,
+
+  //Functions:
+  
   // Create an asq compatible printer that prints a particular part of params
   // with given print options:
   makePrinter: function(tagToPrint, useJSONstringify = true, addHeader = true){
@@ -116,7 +127,7 @@ module.exports = {
     // Expected params: * params[tagToPrint] - this should exist
     // Output params:   * params.gvFilesCreated : map from filePrefix --> actual file path
     var timeStamp = ( addTimeStamp ? ('_' + moment().format() ) : '' );
-    var filePath = `./gv/${filePrefix}${timeStamp}.gv`;
+    var filePath = `${GV_PATH}${filePrefix}${timeStamp}.gv`;
     return function printer(done, params){
       var printObj = params[tagToPrint];
       if(useJSONstringify) {
@@ -141,17 +152,20 @@ module.exports = {
     };
   },
 
-
-  // Create an asq compatible file writer for a particular part of params
-  // with given print options:
-  makeGV2SVGtranslator: function(filePrefix){
+  // Create an asq compatible file translator (based on unix'es dot program)
+  // which will convert GraphViz files to SVG vector files (saved as HTML and viewable with a browser)
+  // if saveTReportsDir == true, save to HTML_PATH as well
+  makeGV2SVGtranslator: function(filePrefix, saveToReportsDir = false){
     // Expected params: * params.gvFilesCreated[filePrefix] - which points to the actual .gv path
     // Output params:   * params.svgFilesCreated : map from filePrefix --> actual file path
     //                  * params.exec - which contains data for each command run
     return function printer(done, params){
       var gvFilePath = params.gvFilesCreated[filePrefix];
-      var svgFilePath = `./svg/${gvFilePath.split('/')[2].split('.')[0]}.html`;
+      var svgFilePath = `${SVG_PATH}${gvFilePath.split('/')[4].split('.')[0]}.html`;      
       var cmd = `dot -Tsvg ${gvFilePath} > ${svgFilePath}`;
+      if (saveToReportsDir) {
+        cmd += ` && dot -Tsvg ${gvFilePath} > ${HTML_PATH}${filePrefix}.html`;
+      }
       exec(cmd, (error, stdout, stderr) => {
         if(error)
           done.fail(error);

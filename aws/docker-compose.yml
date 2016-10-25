@@ -1,0 +1,9 @@
+version: '2'
+services:
+  awsanalyze:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - './reports:/prj/reports'
+    container_name: awsanalyze

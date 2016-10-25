@@ -2,7 +2,7 @@
 
 I really ought to break the `./aws` project out on its own. But I was inspired by this project (thank you [mdaines](https://github.com/mdaines) ) and stuck my work inside.
 
-See [the AWS README](./aws/READMEM.md) for more details.
+See [the AWS README](./aws/README.md) for more details.
 
 # Viz.js
 

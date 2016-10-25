@@ -1,9 +1,31 @@
+# What does this project do?
+
+### GIVEN: AWS VPC
+### Create a visual graph that shows
+* All the Security Groups within that VPC
+* All the EC2 boxes within that VPC
+* All the RDS instances withing that VPC
+* Allowed network flow in your VPC. There is a...
+   *  ***BIG ASSUMPTION***: That every EC2 box in your VPC has outbound Security Group type with label which has a key `type` and value `ec2 instance` and that his security group is used to connect out of the box to more secure systems such as RDS'es.
+       * This is a big assumption because their graph edges are drawn *in the opposite* direction for such Security Groups, as their
+       point it to allow **outbound** connections rather than the typical inbound connections.
+   * **OTHER ASSUMPTIONS**
+       * You can install the `dot` command (i.e., the GraphViz CLI) on your system
+       * Modify `analyzeSecurityGroups.js` (and the `vpcsToAnalyze` constant) to incorporate your specific VPC id's
+       * Security Groups have a `Type` label with possible values `ec2 instance`, `rds instance`, 
+`personal`, `institution ip`, and `service` which allow drawing the graph in a saner manner. If you look at `test.js`
+you'll see versions of the graph drawer which don't make these assumptions. You can also modify `analyzeSecurityGroups.js` (near the bottom to get rid of this assumption, or modify it per your requirements).
+
+# Clone this repo 
+```
+git clone https://github.com/tzaffi/viz.js
+```
+
 # Installation (with Docker)
 You'll need to have the Docker engine including `docker-compose` on your system.
 
-## Clone this repo and build the Docker image
+and build the Docker image
 ```
-git clone https://github.com/tzaffi/viz.js/
 cd viz.js/aws
 docker-compose --verbose up -d --force-recreate --remove-orphans
 ```

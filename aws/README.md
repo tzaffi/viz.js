@@ -21,6 +21,10 @@ you'll see versions of the graph drawer which don't make these assumptions. You 
 git clone https://github.com/tzaffi/viz.js
 ```
 
+# Modify the source code
+See the assumptions above. You'll need to make specific changes to `AnalyzeSecurityGroups.js` as well as `lib.js`
+to work with your system.
+
 # Installation (with Docker)
 You'll need to have the Docker engine including `docker-compose` on your system.
 

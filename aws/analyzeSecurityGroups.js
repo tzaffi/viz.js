@@ -1,6 +1,6 @@
 const vpcsToAnalyze = new Map([
-  ['EdLab Apps', { VpcId: 'vpc-79fa251c', File: 'EdLabApps' }],
-  ['Library Apps', { VpcId: 'vpc-76d49213', File: 'LibraryApps' }]
+  ['Your First VPC Human Friendly Name', { VpcId: 'vpc-XYZWHATEVER', File: 'FirstFriendlyName' }],
+  ['Your Second VPC Human Friendly Name', { VpcId: 'vpc-XYZWHATEVER2', File: 'SecondFriendlyName' }]
 ]);
 
 
